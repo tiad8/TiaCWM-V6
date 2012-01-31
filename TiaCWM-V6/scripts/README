@@ -1,0 +1,41 @@
+Android eclair rootfs scripts
+--------------------------------------
+
+These scripts are meant to be used by packagers who are creating a new rootfs
+image from a local checkout of the git repo.
+
+gitclean.sh
+===========
+This script will clean out all git-related files from the rootfs. This is not
+inherently necessary, but is needed to keep the rootfs small. Run this file
+from the root directory of the image.
+
+ * Invocation: $ scripts/gitclean.sh
+
+distprepare.py (REMOVED) - This is no longer needed and is removed from the
+repository.
+
+generate-rootfs.sh
+==================
+This is a quick-and-dirty shell script to generate a rootfs.img from a given
+git repository and, optionally, a given branch. This will do everything from
+check out the repository to build the filesystem image.
+
+This script uses the following packager script also located in the scripts
+directory: gitclean.sh
+
+This script relies upon the following third party utility: genext2fs
+
+There are a few shell variables used in the script as configuration. They are
+located at the beginning of the script before any commands. Adjust them as you
+see fit, then invoke the script.
+
+This script is not designed to be run in any particular directory. You may run
+it even in a live development repository (though this is not suggested). It
+will do all work on a temporary git clone, which it then deletes.
+
+If you already have a local clone of the git repository, you can set the REPO
+variable to the directory where the repository is located. This will save you
+some bandwidth by cloning the local repository and not using the network.
+
+ * Invocation: $ ./generate-rootfs.sh

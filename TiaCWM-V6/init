@@ -1,0 +1,419 @@
+#!/bin/sh
+
+# Init edited and modified by tiad8
+
+
+/bin/mount -o remount,rw / /
+/bin/mount -t proc proc /proc
+/bin/mount -t sysfs sys /sys
+
+#internet speed tweaks,vm management tweaks, and battery tweaks 
+echo 1024 > /sys/devices/virtual/bdi/179:0/read_ahead_kb
+echo 7 > /proc/sys/vm/laptop_mode
+echo 90 > /proc/sys/vm/dirty_ratio
+echo 60000 > /proc/sys/vm/dirty_expire_centisecs
+echo 60000 > /proc/sys/vm/dirty_writeback_centisecs
+
+card=/sdcard
+mount -t vfat -o fmask=0000,dmask=0000,utf8,rw,flush,noatime,nodiratime /dev/block/mmcblk0p1 /sdcard
+[ $? -eq 0 ] || fail "Failed to mount the SD card. Cannot continue."
+
+if [ ! -d /sdcard/npkboot/tmp ] ; then
+	mkdir /sdcard/npkboot/tmp
+fi	
+
+mount /sdcard/npkboot/tmp /tmp 
+ [ $? -eq 0 ] || fail "Failed to mount TMP directory. Cannot continue."
+mount -t ext2 -o noatime,nodiratime /dev/block/mmcblk0p2 /system
+ [ $? -eq 0 ] || fail "Failed to mount SYSTEM partition. Cannot continue."
+mount -t ext2 -o noatime,nodiratime /dev/block/mmcblk0p3 /data
+ [ $? -eq 0 ] || fail "Failed to mount DATA partition. Cannot continue."
+mount -t ext2 -o noatime,nodiratime /dev/block/mmcblk0p4 /cache
+ [ $? -eq 0 ] || fail "Failed to mount CACHE partition. Cannot continue."
+
+clear
+if [ ! -d /cache/recovery ]; then
+	mkdir /cache/recovery
+fi
+clear
+
+	if [ -d /sdcard/npkboot ]; then
+		echo "   "
+		echo "   "
+		echo "   "
+		read -s -n3 -p "PRESS VOLUME DOWN **NOW** TO ENTER RECOVERY..." -t5 keypress
+			if [ "$keypress" = "[2" ] ; then
+					if [ ! -d /cache/recovery ] ; then
+							mkdir /cache/recovery
+					fi
+				rm -f /init.rc
+				rm -f /etc
+				ln -s /init.cfg/etc /etc
+				ln -s /init.cfg/etc/init.rc /init.rc
+				if cat /proc/cpuinfo|grep -q Kovsky ; then
+					echo "XPERIA detected"
+					mount --bind /sbin/recoveryx /sbin/recovery
+				fi				
+				exec /init.recovery
+			else
+				echo "Booting Android..."
+			fi
+	fi
+	if [ -f /sdcard/npkboot/recovery.txt ]; then
+					if [ ! -d /cache/recovery ] ; then
+							mkdir /cache/recovery
+					fi
+				rm -f /init.rc
+				rm -f /etc
+				ln -s /init.cfg/etc /etc
+				ln -s /init.cfg/etc/init.rc /init.rc
+			if cat /proc/cpuinfo|grep -q Kovsky ; then
+					echo "XPERIA detected"
+					mount --bind /sbin/recoveryx /sbin/recovery
+			fi				
+				exec /init.recovery			
+	fi
+
+if [ -d $card/npkboot/AndroidApps ] ; then
+        echo Copying Applications
+        if [ ! -d /data/app ] ; then
+                mkdir -m 0775 /data/app
+		chown -R 1000:1000 /data/app
+        fi
+	(cd $card/npkboot/AndroidApps; for i in *; do if [ ! -f "/data/app/$i" -o "$i" -nt "/data/app/$i" ]; then \
+		cp "$i" /data/app; fi done)
+fi
+
+if [ ! -d $card/npkboot/media ] ; then
+        echo You have no media folder, please extract the resources to your SD card NPKBOOT/MEDIA folder
+fi
+if [ ! -d $card/npkboot/mp3 ] ; then
+        echo You have no mp3 folder, please extract the resources to your SD card NPKBOOT/MP3 folder
+fi
+if [ ! -d /data/app ] ; then
+                mkdir -m 0775 /data/app		
+fi
+chown -R 1000:1000 /data/app
+if [ ! -d /data/app-private ] ; then
+                mkdir -m 0775 /data/app-private
+fi
+chown -R 1000:1000 /data/app-private
+cp -ar /init.etc/* /system/etc
+
+KAISER=0
+DIAMOND=0
+WIFI_TI=0
+WIFI_BCM=0
+XPERIA=0
+WVGA=0
+HW=`cat /proc/cpuinfo | grep Hardware`
+case "$HW" in
+    *Diamond*)
+	echo "DIAMOND detected"
+	HW=DIAMOND
+	DIAMOND=1
+	WIFI_TI=1        
+	;;
+    *Raphael*)
+	echo "RAPHAEL detected"
+	HW=RAPHAEL
+	DIAMOND=1
+	WIFI_TI=1        
+	;;
+    *blackstone*)
+	echo "BLACKSTONE detected"
+	HW=BLACKSTONE
+	DIAMOND=1
+	WIFI_TI=1
+	WVGA=1
+	;;
+    *Topaz*)
+	echo "TOPAZ detected"
+	HW=TOPAZ
+	DIAMOND=1
+	WIFI_TI=1
+	WVGA=1
+	;;
+    *Kovsky*)
+	echo "XPERIA detected"
+	HW=KOVSKY
+	XPERIA=1
+	WIFI_TI=1
+	WVGA=1
+	;;
+    *Rhodium*)
+	echo "RHODIUM detected"
+	HW=RHODIUM
+	DIAMOND=1
+	WIFI_BCM=1
+	WVGA=1
+	;;
+    *)
+	echo "VOGUE detected"
+	HW=VOGUE
+	;;
+esac
+
+RCSCRIPT=""
+RCCONFIG=""
+
+echo "Checking for build type..."
+if [ -f /system/TiaDroid.build ] ; then
+	echo "TiaDroid8 2.2.2 build detected"
+	RCSCRIPT="froyo"
+	RCCONFIG="froyo"
+	mount --bind /lib/froyo/hw /system/lib/hw
+
+elif [ -f /system/TiaGB.build ] ; then
+	echo "TiaGB.2.3.7 build detected"
+	RCSCRIPT="gingerbread"
+	RCCONFIG="gingerbread"
+
+elif [ -f /system/TiaCM7.build ] ; then
+	echo "TiaCM.2.3.7 build detected"
+	RCSCRIPT="cm7"
+	RCCONFIG="cm7"
+
+elif [ -f /system/TiaSense.build ] ; then
+	echo "TiaSense 2.2 build detected"
+	RCSCRIPT="sensefroyo"
+	RCCONFIG="sensefroyo"
+
+elif [ -f /system/TiaICS.build ] ; then
+	echo "TiaICS 4.0 build detected"
+	RCSCRIPT="ics"
+	RCCONFIG="ics"
+
+elif [ -f /system/TiaMiui.build ] ; then
+	echo "TiaMiui 2.3.7 build detected"
+	RCSCRIPT="miui"
+	RCCONFIG="miui"
+
+else
+	echo "Unknown Android build. Assuming Ion variant"
+	RCSCRIPT="ion"
+	RCCONFIG="ion"
+
+	# for the fake sensors library
+	mount /lib/hw /system/lib/hw -o loop
+	chmod 666 /dev/input/event0
+
+	if [ $DIAMOND -eq 1 ] ; then
+		RCCONFIG="ion.diamond"
+	fi
+fi
+
+LCDDENSITY=`/bin/grep -o "lcd.density=.*" /proc/cmdline | /bin/sed -e "s/.*lcd.density=//g" -e "s/ .*//g"`
+
+	DENS2=`grep lcd_density /system/etc/default.prop | sed -e 's/.*=//'`
+	if [ -z "$DENS2" ]; then
+			echo "ro.sf.lcd_density=$LCDDENSITY" >> /system/etc/default.prop
+			echo "qemu.sf.lcd_density=$LCDDENSITY" >> /system/etc/default.prop
+	else
+			sed -i /ro.sf.lcd_density/s/=.*/=$LCDDENSITY/ /system/etc/default.prop
+			sed -i /qemu.sf.lcd_density/s/=.*/=$LCDDENSITY/ /system/etc/default.prop
+	fi
+	
+	
+	DENS2a=`grep qemu.sf.lcd_density /system/build.prop | sed -e 's/.*=//'`
+	if [ -z "$DENS2a" ]; then
+			echo "ro.sf.lcd_density=$LCDDENSITY" >> /system/build.prop
+			echo "qemu.sf.lcd_density=$LCDDENSITY" >> /system/build.prop		
+	else
+			sed -i /ro.sf.lcd_density/s/=.*/=$LCDDENSITY/ /system/build.prop
+			sed -i /qemu.sf.lcd_density/s/=.*/=$LCDDENSITY/ /system/build.prop
+	fi
+	
+
+	
+if [ $XPERIA -eq 1 ] ; then
+	ROT=`grep hwrotation /system/etc/default.prop | sed -e 's/.*=//'`
+	if [ "$ROT" != 180 ]; then
+		echo Setting ro.sf.hwrotation=180
+		if [ -z "$ROT" ]; then
+			echo "ro.sf.hwrotation=180" >> /system/etc/default.prop
+		else
+			sed -i /hwrotation/s/=.*/=180/ /system/etc/default.prop
+		fi
+	fi
+fi
+
+if [ $XPERIA -eq 1 ] ; then
+	ROT1=`grep hwrotation /system/build.prop | sed -e 's/.*=//'`
+	if [ "$ROT1" != 180 ]; then
+		echo Setting ro.sf.hwrotation=180
+		if [ -z "$ROT" ]; then
+			echo "ro.sf.hwrotation=180" >> /system/build.prop
+		else
+			sed -i /hwrotation/s/=.*/=180/ /system/build.prop
+		fi
+	fi
+fi
+
+rm -f /init.rc
+rm -f /etc
+ln -s "/init.cfg/init.$RCSCRIPT.rc" /init.rc
+ln -s /system/etc /etc
+
+# echo /dev/block/mmcblk0p2 > /sys/devices/platform/usb_mass_storage/lun0/file
+ifconfig usb0 192.168.20.1 up
+/bin/busybox /bin/telnetd -b 192.168.20.1 -l /system/bin/sh
+#chmod 4755 /bin/su
+#mkdir -m 0777 /smodem
+
+if [ -d /data/dropbear/ ] ; then
+	echo "Starting SSH"
+	mknod /dev/random c 1 8
+	mknod /dev/urandom c 1 9
+	/bin/dropbear -r /data/dropbear/dropbear_rsa_host_key -s
+fi
+
+if [ "$WIFI_TI" = "1" ] || [ "$WIFI_BCM" = "1" ];then
+	if [ -e "$card/npkboot/modules-$(uname -r).tar.gz" ] && ! `strings /lib/modules/mac80211.ko 2>/dev/null | grep -q "vermagic=$(uname -r)"`; then
+		echo "Installing $card/npkboot/modules-$(uname -r).tar.gz"
+                rm -rf /lib/modules/*
+		tar xzf $card/npkboot/modules-$(uname -r).tar.gz -C /lib/modules
+		ln -s /lib/modules /lib/modules/`uname -r`
+	else
+		echo "Modules already unpacked for this kernel version -- skipping installation of $card/modules-$(uname -r).tar.gz"
+	fi
+
+
+	if [ -f /system/etc/wifi/wlan.ko ]; then
+	cp -R /system/etc/wifi/* /lib/modules/
+	rm /system/etc/wifi/wlan.ko
+	depmod
+	fi
+
+	if [ "`grep -c ^wifi /system/etc/default.prop`" != "2" ]; then
+		echo "wifi.interface = wlan0" >> /system/etc/default.prop
+		echo "wifi.supplicant_scan_interval = 180" >> /system/etc/default.prop
+	fi
+	if [ "`grep -c ^wifi /system/build.prop`" != "2" ]; then
+		echo "wifi.interface = wlan0" >> /system/build.prop
+		echo "wifi.supplicant_scan_interval = 180" >> /system/build.prop
+	fi	
+fi
+
+if [ -f /system/eclair.build ]
+then
+	mount --bind /lib/eclair/libhardware_legacy.so /system/lib/libhardware_legacy.so
+fi
+
+if [ "$WIFI_BCM" = "1" ] ;then
+	# fyi: firmware is loaded from /data/etc/wifi/bcm432x/bcm4325-rtecdc.bin, nvram from /data/wifi-nvram.txt
+
+	# extract nvram (todo: clean this up/integrate with TI calibration)
+	if [ ! -e /data/wifi-nvram.txt ]; then
+		insmod /lib/modules/mtdchar.ko
+		mknod /dev/mtd0ro c 90 1
+		for SKIP in 5744 4736;do
+			mkdir /lib/modules/$(uname -r)
+
+			dd if=/dev/mtd0ro of=/tmp/tempcal bs=8192 count=1 skip=$SKIP
+			rmdir /lib/modules/$(uname -r)
+			dd if=/tmp/tempcal of=/data/wifi-nvram.txt bs=1 count=466
+			rm /tmp/tempcal
+		
+			if grep nocrc= /data/wifi-nvram.txt 2>&1 > /dev/null;then 
+				break
+			fi;
+		done
+		rm /dev/mtd0ro
+		rmmod mtdchar
+		if [ "$SKIP" = "5744" ];then
+			echo "CDMA Rhodium detected"
+		fi;
+		if [ "$SKIP" = "4736" ];then
+			echo "GSM Rhodium detected"
+		fi;
+
+	fi
+fi
+if [ -f "$system/etc/conf/$RCCONFIG.user.conf" ]; then
+	/bin/userinit.sh -c "$system/etc/conf/$RCCONFIG.user.conf"
+else
+	echo "No user config files ($RCCONFIG) found on sdcard"
+fi
+	
+for i in local.prop eri.xml serialno; do
+	if [ -f "$card/$i" ]; then
+		if [ ! -f /data/$i -o "$card/$i" -nt /data/$i ]; then
+			cp "$card/$i" /data/$i
+		fi
+	fi
+done
+
+mount -tdebugfs none /dbgfs
+#Activate baclight control
+echo 3 > /sys/class/htc_hw/test
+#Smooth scroll
+echo 40 >/sys/devices/system/cpu/cpu0/cpufreq/ondemand/up_threshold
+#Activate full charging
+echo 2 > /dbgfs/htc_battery/charger_state
+
+[ -z $KBD ] && KBD=`sed 's/.*physkeyboard=\([0-9a-z_]*\).*/\1/' /proc/cmdline`
+cp /system/etc/keymaps/default/*.kl /system/usr/keylayout/
+cp /system/etc/keymaps/default/*.kcm* /system/usr/keychars/
+if [ -d "/system/etc/keymaps/$KBD" ]
+then
+	cp /system/etc/keymaps/"$KBD"/*.kl /system/usr/keylayout/
+	cp /system/etc/keymaps/"$KBD"/*.kcm* /system/usr/keychars/
+fi
+
+mount -o remount,ro /system
+
+for i in /sys/class/input/input* ; do
+        if [ "`cat $i/name`" = "tssc-manager" ] ; then
+                touchscreendir=$i
+                echo "Touchscreen device directory is $i"
+        fi
+done
+
+## Ts Calibration
+for i in /sys/class/input/input* ; do
+        if [ "`cat $i/name`" = "tssc-manager" ] ; then
+                touchscreendir=$i
+                echo "Touchscreen device directory is $i"
+        fi
+done
+
+if [ -f /data/ts-calibration ] ; then
+        echo "Using Saved Touchscreen Calibration"
+        echo 128,128,1903,128,128,1907,1903,1907,1024,1024 > $touchscreendir/calibration_screen
+        cat /data/ts-calibration > $touchscreendir/calibration_points
+else
+        echo "Using Default Calibration Values"
+        echo 836,883,194,888,510,520,838,179,188,181 > /data/ts-calibration
+        cat /data/ts-calibration > $touchscreendir/calibration_points
+fi
+
+mkdir /dev/msm_camera
+mknod /dev/msm_camera/control0 c 250 0
+mknod /dev/msm_camera/config0 c 250 1
+mknod /dev/msm_camera/frame0 c 250 2
+cp /backup.rle /initlogo.rle
+
+# Generate a "serial number" for the Android system to identify the device.
+# Put it in /data so it survives reboots. Won't survive a factory reset, though.
+[ -f "/data/serialno" ] || echo -e `cat /dev/urandom | tr -dc 'A-Z0-9' | fold -w 12 | head -n 1` >/data/serialno
+
+SERIALNO=$(cat /data/serialno)
+cp /proc/cmdline /tmp/cmdline
+sed -i -e "s:$: androidboot.serialno=${SERIALNO}:" /tmp/cmdline
+mount --bind /tmp/cmdline /proc/cmdline
+
+# Transition sequence for FRX06->FRX07 (eth0/tiwlan0 renamed)
+if [ -f "/data/misc/wifi/wpa_supplicant.conf" ]
+then
+	sed -i -e 's:=\(tiwlan0\|eth0\):=wlan0:' /data/misc/wifi/wpa_supplicant.conf
+	chown 1000:1010 /data/misc/wifi/wpa_supplicant.conf
+fi
+
+# Bind-mount /sdcard/.android_secure to /mnt/secure/asec for native Apps2SD
+[ -d /sdcard/.android_secure ] || mkdir /sdcard/.android_secure
+mount --bind /sdcard/.android_secure /mnt/secure/asec
+
+sleep 3
+
+exec /init.android

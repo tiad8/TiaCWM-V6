@@ -1,0 +1,68 @@
+TiaCWM V6 BETA RELEASE
+
+change log
+
+-totally re-design CWM. the process has began for a full cwm touch screen.
+-re-compiled the bin and sbin
+
+-added initlogo.rle to the sd recovery in init
+code:
+cp /backup.rle /initlogo.rle
+
+-added mp3 code in init
+code:
+if [ ! -d $card/npkboot/mp3 ] ; then
+echo You have no mp3 folder, please extract the resources to your SD card NPKBOOT/MP3 folder
+fi
+
+-the new META folder will have this code to flash rom fron now on
+code:
+format("yaffs2", "MTD", "system", "0");
+mount("yaffs2", "MTD", "system", "/system");
+format("yaffs2", "MTD", "data", "0");
+mount("yaffs2", "MTD", "data", "/data");
+format("yaffs2", "MTD", "cache", "0");
+mount("yaffs2", "MTD", "cache", "/cache");
+
+-new code for nandroid-md5. this is to do a nand backup on your sdcard
+code:
+cd $1
+rm -f /tmp/nandroid.md5
+md5sum * .* > /tmp/nandroid.md5
+cp /tmp/nandroid.md5 .
+# need this because wildcard seems to cause md5sum to return 1
+if [ -f nandroid.md5 ]
+then
+return 0
+else
+return 1
+fi
+
+-added this code for ts-calibration no need to have the file anymore in you sdcard or system
+code:
+## Ts Calibration
+for i in /sys/class/input/input* ; do
+if [ "`cat $i/name`" = "tssc-manager" ] ; then
+touchscreendir=$i
+echo "Touchscreen device directory is $i"
+fi
+done
+
+if [ -f /data/ts-calibration ] ; then
+echo "Using Saved Touchscreen Calibration"
+echo 128,128,1903,128,128,1907,1903,1907,1024,1024 > $touchscreendir/calibration_screen
+cat /data/ts-calibration > $touchscreendir/calibration_points
+else
+echo "Using Default Calibration Values"
+echo 836,883,194,888,510,520,838,179,188,181 > /data/ts-calibration
+cat /data/ts-calibration > $touchscreendir/calibration_points
+fi
+
+
+
+
+
+
+
+
+
